@@ -1,0 +1,12 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+Cpp11BracedListStyle: false
+AlignConsecutiveAssignments: Consecutive
+AllowShortFunctionsOnASingleLine: None
+AlignArrayOfStructures: Right
+SpaceBeforeParens: Custom
+SpaceBeforeParensOptions:
+  AfterControlStatements: false
+  AfterFunctionDefinitionName: false
+SortIncludes: false

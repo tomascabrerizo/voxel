@@ -1,0 +1,13 @@
+Diagnostics:
+    UnusedIncludes: None
+
+-pedantic
+-Wall
+-Wextra
+-Werror
+-std=c11
+-g
+-I./thirdparty
+-I./thirdparty/SDL2/include
+-I./thirdparty/glad/include
+-D_CRT_SECURE_NO_WARNINGS
