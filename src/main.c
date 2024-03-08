@@ -272,6 +272,13 @@ void generate_chunk_voxels(Chunk *chunk) {
                 } else {
                     voxel->type = VOXEL_AIR;
                 }
+#if 0
+                if(y < CHUNK_Y / 2) {
+                    voxel->type = VOXEL_STONE;
+                } else {
+                    voxel->type = VOXEL_AIR;
+                }
+#endif
             }
         }
     }
@@ -570,7 +577,6 @@ int main(void) {
                 ++z) {
                 if(!chunk_is_loaded(x, z)) {
                     load_chunk(x, z);
-                    // printf("loding chunk!\n");
                 }
             }
         }
@@ -585,8 +591,16 @@ int main(void) {
         M4 view = m4_lookat2(camera.pos, v3_add(camera.pos, camera.target), camera.up);
         gpu_load_m4_uniform(program, "view", view);
 
+        u32 total_chunk_count     = 0;
+        u32 total_geometry_memory = 0;
+        unused(total_chunk_count);
+        unused(total_geometry_memory);
+
         Chunk *chunk = list_get_top(&loaded_chunks);
         while(!list_is_end(&loaded_chunks, chunk)) {
+
+            total_geometry_memory += chunk->geometry_count;
+            ++total_chunk_count;
 
             if(chunk->x >= current_chunk_x - MAX_CHUNKS_X / 2 &&
                chunk->x <= current_chunk_x + MAX_CHUNKS_X / 2 &&
@@ -599,16 +613,16 @@ int main(void) {
                 M4 model  = m4_translate(v3(pos_x, 0, pos_z));
                 gpu_load_m4_uniform(program, "model", model);
 
-#if 0
-                glBufferSubData(GL_ARRAY_BUFFER, 0, chunk->geometry_count * sizeof(Vertex),
-                                chunk->geometry);
-#endif
                 glBindVertexArray(chunk->vao);
                 glDrawArrays(GL_TRIANGLES, 0, chunk->geometry_count);
             }
             chunk = chunk->next;
         }
-
+#if 1
+        f32 avrg_geometry_count = (f32)total_geometry_memory / (f32)total_chunk_count;
+        printf("avrg geometry memory usage:%.3f MB\n",
+               (avrg_geometry_count * sizeof(Vertex)) / (1024.0f * 1024.0f));
+#endif
         os_swap_window();
     }
 

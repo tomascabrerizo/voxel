@@ -25,6 +25,7 @@ typedef u32 b32;
 #define unused(variable) (void)(variable)
 #define array_len(array) ((sizeof((array))) / sizeof((array)[0]))
 #define offset_of(type, value) (&(((type *)0)->value))
+#define is_power_of_two(value) (((value) & (value - 1)) == 0)
 
 #define list_init(node) ((node)->prev = (node), (node)->next = (node))
 
