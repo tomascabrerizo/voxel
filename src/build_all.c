@@ -4,4 +4,5 @@
 
 #include "os.c"
 #include "gpu.c"
+#include "voxel.c"
 #include "main.c"

@@ -26,6 +26,16 @@ typedef u32 b32;
 #define array_len(array) ((sizeof((array))) / sizeof((array)[0]))
 #define offset_of(type, value) (&(((type *)0)->value))
 #define is_power_of_two(value) (((value) & (value - 1)) == 0)
+#define next_power_of_two(value)                                                                   \
+    do {                                                                                           \
+        value--;                                                                                   \
+        value |= value >> 1;                                                                       \
+        value |= value >> 2;                                                                       \
+        value |= value >> 4;                                                                       \
+        value |= value >> 8;                                                                       \
+        value |= value >> 16;                                                                      \
+        value++;                                                                                   \
+    } while(0)
 
 #define list_init(node) ((node)->prev = (node), (node)->next = (node))
 
@@ -56,5 +66,38 @@ typedef u32 b32;
 #define list_get_back(dummy) (dummy)->prev
 
 #define list_get_top(dummy) (dummy)->next
+
+// NOTE: named link list
+
+#define list_init_named(node, name) ((node)->prev_##name = (node), (node)->next_##name = (node))
+
+#define list_insert_front_named(node0, node1, name)                                                \
+    (node1)->prev_##name              = (node0);                                                   \
+    (node1)->next_##name              = (node0)->next_##name;                                      \
+    (node1)->prev_##name->next_##name = (node1);                                                   \
+    (node1)->next_##name->prev_##name = (node1);
+
+#define list_insert_back_named(node0, node1, name)                                                 \
+    (node1)->prev_##name              = (node0)->prev_##name;                                      \
+    (node1)->next_##name              = (node0);                                                   \
+    (node1)->prev_##name->next_##name = (node1);                                                   \
+    (node1)->next_##name->prev_##name = (node1);
+
+#define list_remove_named(node, name)                                                              \
+    (node)->prev_##name->next_##name = (node)->next_##name;                                        \
+    (node)->next_##name->prev_##name = (node)->prev_##name;
+
+#define list_is_empty_named(dummy, name)                                                           \
+    ((dummy)->next_##name == (dummy) && (dummy)->prev_##name == (dummy))
+
+#define list_is_end_named(dummy, node, name) ((node) == (dummy))
+
+#define list_is_first_named(dummy, node, name) ((node)->prev_##name == (dummy))
+
+#define list_is_last_named(dummy, node, name) ((node)->next_##name == (dummy))
+
+#define list_get_back_named(dummy, name) (dummy)->prev_##name
+
+#define list_get_top_named(dummy, name) (dummy)->next_##name
 
 #endif //  _COMMON_H_
