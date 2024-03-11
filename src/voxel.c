@@ -4,6 +4,69 @@
 
 #include "voxel.h"
 
+// NOTE: Multithreading job system --------------------------------------
+
+SDL_Thread *thread_pool[MAX_WORKER_THREADS];
+SDL_sem *semaphore;
+SDL_sem *jobs_done_signal;
+
+ThreadJob jobs[MAX_THREAD_JOBS];
+SDL_atomic_t jobs_pushed;
+SDL_atomic_t jobs_done;
+SDL_atomic_t next_job;
+
+void job_queue_begin(void) {
+    jobs_pushed.value = 0;
+    jobs_done.value   = 0;
+    next_job.value    = 0;
+}
+
+void job_queue_end(void) {
+    while(jobs_done.value < jobs_pushed.value) {
+    }
+}
+
+void push_job(ThreadJob job) {
+    jobs[jobs_pushed.value] = job;
+    SDL_CompilerBarrier();
+    SDL_AtomicIncRef(&jobs_pushed);
+    SDL_SemPost(semaphore);
+}
+
+static int thread_do_jobs(void *data) {
+    unused(data);
+    for(;;) {
+        s32 job_index = next_job.value;
+        if(job_index < jobs_pushed.value) {
+            if(SDL_AtomicCAS(&next_job, job_index, job_index + 1)) {
+                ThreadJob *job = jobs + job_index;
+                job->run(job->args);
+                SDL_AtomicIncRef(&jobs_done);
+            }
+        } else {
+            SDL_SemWait(semaphore);
+        }
+    }
+    return 0;
+}
+
+void job_system_initialize(void) {
+    semaphore        = SDL_CreateSemaphore(0);
+    jobs_done_signal = SDL_CreateSemaphore(0);
+
+    for(u32 thread_index = 0; thread_index < MAX_WORKER_THREADS; ++thread_index) {
+        SDL_Thread **thread = thread_pool + thread_index;
+        *thread             = SDL_CreateThread(thread_do_jobs, NULL, NULL);
+    }
+}
+
+void job_system_terminate(void) {
+    SDL_DestroySemaphore(semaphore);
+    SDL_DestroySemaphore(jobs_done_signal);
+}
+
+// ----------------------------------------------------------------------
+
 static VoxelBlock voxel_block_map[VOXEL_TYPE_COUNT];
 
 Chunk free_chunks;
@@ -122,13 +185,6 @@ static void generate_chunk_voxels(Chunk *chunk) {
                 } else {
                     voxel->type = VOXEL_AIR;
                 }
-#if 0
-                if(y < CHUNK_Y / 2) {
-                    voxel->type = VOXEL_STONE;
-                } else {
-                    voxel->type = VOXEL_AIR;
-                }
-#endif
             }
         }
     }
@@ -177,16 +233,12 @@ static Chunk *hash_chunk_get(s32 x, s32 z) {
 }
 
 static inline bool back_voxels_solid(Chunk *chunk, Voxel *voxel) {
-    Voxel *other = NULL;
 
     if(voxel->z == 0) {
-        Chunk *other_chunk = hash_chunk_get(chunk->x, chunk->z - 1);
-        if(other_chunk) {
-            other = get_chunk_voxel(other_chunk, voxel->x, voxel->y, (CHUNK_Z - 1));
-        }
-    } else {
-        other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z - 1);
+        return true;
     }
+
+    Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z - 1);
 
     if(!other) {
         return false;
@@ -195,16 +247,12 @@ static inline bool back_voxels_solid(Chunk *chunk, Voxel *voxel) {
 }
 
 static inline bool front_voxels_solid(Chunk *chunk, Voxel *voxel) {
-    Voxel *other = NULL;
 
     if(voxel->z == (CHUNK_Z - 1)) {
-        Chunk *other_chunk = hash_chunk_get(chunk->x, chunk->z + 1);
-        if(other_chunk) {
-            other = get_chunk_voxel(other_chunk, voxel->x, voxel->y, 0);
-        }
-    } else {
-        other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z + 1);
+        return true;
     }
+
+    Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z + 1);
 
     if(!other) {
         return false;
@@ -215,15 +263,11 @@ static inline bool front_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
 static inline bool left_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
-    Voxel *other = NULL;
     if(voxel->x == 0) {
-        Chunk *other_chunk = hash_chunk_get(chunk->x - 1, chunk->z);
-        if(other_chunk) {
-            other = get_chunk_voxel(other_chunk, CHUNK_X - 1, voxel->y, voxel->z);
-        }
-    } else {
-        other = get_chunk_voxel(chunk, voxel->x - 1, voxel->y, voxel->z);
+        return true;
     }
+
+    Voxel *other = get_chunk_voxel(chunk, voxel->x - 1, voxel->y, voxel->z);
 
     if(!other) {
         return false;
@@ -233,15 +277,11 @@ static inline bool left_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
 static inline bool right_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
-    Voxel *other = NULL;
     if(voxel->x == CHUNK_X - 1) {
-        Chunk *other_chunk = hash_chunk_get(chunk->x + 1, chunk->z);
-        if(other_chunk) {
-            other = get_chunk_voxel(other_chunk, 0, voxel->y, voxel->z);
-        }
-    } else {
-        other = get_chunk_voxel(chunk, voxel->x + 1, voxel->y, voxel->z);
+        return true;
     }
+
+    Voxel *other = get_chunk_voxel(chunk, voxel->x + 1, voxel->y, voxel->z);
 
     if(!other) {
         return false;
@@ -386,15 +426,9 @@ static void generate_chunk_geometry(Chunk *chunk) {
             }
         }
     }
-
-    glBindBuffer(GL_ARRAY_BUFFER, chunk->vao);
-    // glBufferSubData(GL_ARRAY_BUFFER, 0, chunk->geometry_count * sizeof(Vertex), chunk->geometry);
-    glBufferData(GL_ARRAY_BUFFER, chunk->geometry_count * sizeof(Vertex), chunk->geometry,
-                 GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-static void update_adjecent_chunks(Chunk *chunk) {
+void update_adjecent_chunks(Chunk *chunk) {
     Chunk *b = hash_chunk_get(chunk->x, chunk->z - 1);
     Chunk *f = hash_chunk_get(chunk->x, chunk->z + 1);
     Chunk *l = hash_chunk_get(chunk->x - 1, chunk->z);
@@ -403,6 +437,17 @@ static void update_adjecent_chunks(Chunk *chunk) {
     generate_chunk_geometry(f);
     generate_chunk_geometry(l);
     generate_chunk_geometry(r);
+}
+
+int generate_chunk_voxels_and_geometry_job(void *data) {
+
+    Chunk *chunk = (Chunk *)data;
+    generate_chunk_voxels(chunk);
+    generate_chunk_geometry(chunk);
+
+    chunk->just_loaded = true;
+
+    return 0;
 }
 
 static Chunk *get_farthest_chunk(s32 x, s32 z) {
@@ -424,6 +469,7 @@ static Chunk *get_farthest_chunk(s32 x, s32 z) {
 
         chunk = chunk->next;
     }
+
     assert(result);
     return result;
 }
@@ -431,38 +477,37 @@ static Chunk *get_farthest_chunk(s32 x, s32 z) {
 void unload_chunk(Chunk *chunk) {
     // NOTE: Remove chunk from loaded chunk hash
     list_remove_named(chunk, hash);
-
     // NOTE: Remove chunk from loaded chunks
     list_remove(chunk);
+    // NOTE: Insert chunk in free list
     list_insert_front(&free_chunks, chunk);
 }
 
-Chunk *load_chunk(s32 x, s32 z) {
+void load_chunk(s32 x, s32 z) {
 
     if(list_is_empty(&free_chunks)) {
         Chunk *chunk_to_unload = get_farthest_chunk(x, z);
         unload_chunk(chunk_to_unload);
     }
 
+    Chunk *chunk = list_get_top(&free_chunks);
+    list_remove(chunk);
+    chunk->x              = x;
+    chunk->z              = z;
+    chunk->geometry_count = 0;
+
     // NOTE: Insert chunk into loaded chunk list
-    Chunk *result = list_get_top(&free_chunks);
-    list_remove(result);
-    result->x              = x;
-    result->z              = z;
-    result->geometry_count = 0;
-    list_insert_front(&loaded_chunks, result);
+    list_insert_back(&loaded_chunks, chunk)
 
-    // NOTE: Insert chunk into loaded chunk hash
-    u32 hash      = chunk_get_hash(x, z);
+        // NOTE: Insert chunk into loaded chunk hash
+        u32 hash  = chunk_get_hash(chunk->x, chunk->z);
     Chunk *bucket = hash_chunks + hash;
-    list_insert_back_named(bucket, result, hash);
+    list_insert_back_named(bucket, chunk, hash);
 
-    generate_chunk_voxels(result);
-    generate_chunk_geometry(result);
-
-    update_adjecent_chunks(result);
-
-    return result;
+    ThreadJob job;
+    job.run  = generate_chunk_voxels_and_geometry_job;
+    job.args = (void *)chunk;
+    push_job(job);
 }
 
 b32 chunk_is_loaded(s32 x, s32 z) {

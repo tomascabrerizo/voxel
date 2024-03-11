@@ -16,6 +16,15 @@ static inline f32 lerp(f32 a, f32 b, f32 t) {
     return a * (1 - t) + b * t;
 }
 
+typedef struct V2i {
+    s32 x;
+    s32 y;
+} V2i;
+
+static inline V2i v2i(s32 x, s32 y) {
+    return (V2i){ x, y };
+}
+
 typedef struct V2 {
     float x;
     float y;

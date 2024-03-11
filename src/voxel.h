@@ -1,8 +1,30 @@
 #ifndef _VOXEL_H_
 #define _VOXEL_H_
 
-#include "algebra.h"
+#include "os.h"
 #include "gpu.h"
+#include "algebra.h"
+
+#define MAX_WORKER_THREADS 7
+
+typedef struct ThreadJob {
+    int (*run)(void *data);
+    void *args;
+} ThreadJob;
+
+#define MAX_THREAD_JOBS 1024
+
+void job_system_initialize(void);
+void job_system_terminate(void);
+
+void job_queue_begin(void);
+void job_queue_end(void);
+
+void push_job(ThreadJob job);
+
+int generate_chunk_voxels_and_geometry_job(void *data);
+
+// ----------------------------------------------------------------------
 
 #define ATLAS_W 512
 #define ATLAS_H 512
@@ -84,15 +106,18 @@ typedef struct Chunk {
     struct Chunk *next_hash;
 
     u32 vao;
+
+    b32 just_loaded;
+
 } Chunk;
 
-#define MAX_CHUNKS_X (16 * 1)
-#define MAX_CHUNKS_Y (16 * 1)
+#define MAX_CHUNKS_X (32 * 1)
+#define MAX_CHUNKS_Y (32 * 1)
 #define MAX_CHUNK_GEOMETRY_SIZE (5 * 1024 * 1024)
 #define HASH_CHUNKS_SIZE (MAX_CHUNKS_X * MAX_CHUNKS_Y * 2)
 
 void chunks_initialize(void);
-Chunk *load_chunk(s32 x, s32 z);
+void load_chunk(s32 x, s32 z);
 void unload_chunk(Chunk *chunk);
 b32 chunk_is_loaded(s32 x, s32 z);
 

@@ -90,6 +90,8 @@ int main(void) {
     u32 h = 1080 / 2;
     os_window_initialize(w, h);
 
+    job_system_initialize();
+
     voxel_block_map_initialize();
     chunks_initialize();
 
@@ -128,15 +130,20 @@ int main(void) {
         s32 current_chunk_x = (s32)(camera.pos.x / CHUNK_X);
         s32 current_chunk_z = (s32)(camera.pos.z / CHUNK_Z);
 
+        job_queue_begin();
+
         for(s32 x = current_chunk_x - MAX_CHUNKS_X / 2; x <= current_chunk_x + MAX_CHUNKS_X / 2;
             ++x) {
             for(s32 z = current_chunk_z - MAX_CHUNKS_Y / 2; z <= current_chunk_z + MAX_CHUNKS_Y / 2;
                 ++z) {
                 if(!chunk_is_loaded(x, z)) {
+                    // NOTE: load chunk into linklist
                     load_chunk(x, z);
                 }
             }
         }
+
+        job_queue_end();
 
         glClearColor(0.3f, 0.65f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -158,6 +165,17 @@ int main(void) {
 
             total_geometry_memory += chunk->geometry_count;
             ++total_chunk_count;
+
+            if(chunk->just_loaded) {
+                glBindBuffer(GL_ARRAY_BUFFER, chunk->vao);
+                // glBufferSubData(GL_ARRAY_BUFFER, 0, chunk->geometry_count * sizeof(Vertex),
+                // chunk->geometry);
+                glBufferData(GL_ARRAY_BUFFER, chunk->geometry_count * sizeof(Vertex),
+                             chunk->geometry, GL_DYNAMIC_DRAW);
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+                chunk->just_loaded = false;
+            }
 
             if(chunk->x >= current_chunk_x - MAX_CHUNKS_X / 2 &&
                chunk->x <= current_chunk_x + MAX_CHUNKS_X / 2 &&
@@ -182,6 +200,8 @@ int main(void) {
 #endif
         os_swap_window();
     }
+
+    job_system_terminate();
 
     os_window_terminate();
 
