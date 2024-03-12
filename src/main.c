@@ -121,7 +121,7 @@ int main(void) {
         f32 dt           = current_time - last_time;
         last_time        = current_time;
 
-        //printf("ms:%f\n", dt);
+        // printf("ms:%f\n", dt);
 
         os_process_input();
 

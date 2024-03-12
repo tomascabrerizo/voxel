@@ -8,7 +8,6 @@
 
 SDL_Thread *thread_pool[MAX_WORKER_THREADS];
 SDL_sem *semaphore;
-SDL_sem *jobs_done_signal;
 
 ThreadJob jobs[MAX_THREAD_JOBS];
 SDL_atomic_t jobs_pushed;
@@ -23,6 +22,14 @@ void job_queue_begin(void) {
 
 void job_queue_end(void) {
     while(jobs_done.value < jobs_pushed.value) {
+        s32 job_index = next_job.value;
+        if(job_index < jobs_pushed.value) {
+            if(SDL_AtomicCAS(&next_job, job_index, job_index + 1)) {
+                ThreadJob *job = jobs + job_index;
+                job->run(job->args);
+                SDL_AtomicIncRef(&jobs_done);
+            }
+        }
     }
 }
 
@@ -51,8 +58,7 @@ static int thread_do_jobs(void *data) {
 }
 
 void job_system_initialize(void) {
-    semaphore        = SDL_CreateSemaphore(0);
-    jobs_done_signal = SDL_CreateSemaphore(0);
+    semaphore = SDL_CreateSemaphore(0);
 
     for(u32 thread_index = 0; thread_index < MAX_WORKER_THREADS; ++thread_index) {
         SDL_Thread **thread = thread_pool + thread_index;
@@ -62,7 +68,6 @@ void job_system_initialize(void) {
 
 void job_system_terminate(void) {
     SDL_DestroySemaphore(semaphore);
-    SDL_DestroySemaphore(jobs_done_signal);
 }
 
 // ----------------------------------------------------------------------
