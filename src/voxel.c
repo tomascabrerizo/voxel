@@ -149,6 +149,15 @@ static inline Voxel *get_chunk_voxel(Chunk *chunk, u32 x, u32 y, u32 z) {
     return &chunk->voxels[z * (CHUNK_Y * CHUNK_X) + y * (CHUNK_X) + x];
 }
 
+static f32 calculate_xz_height(s32 chunk_x, s32 chunk_z, s32 x, s32 z) {
+    f32 abs_x = (chunk_x * CHUNK_X + x) / ((f32)CHUNK_X * 2.0f);
+    f32 abs_z = (chunk_z * CHUNK_Z + z) / ((f32)CHUNK_Z * 2.0f);
+    f32 noise = (stb_perlin_noise3(abs_x, 0, abs_z, 0, 0, 0) + 1) / 2.0f;
+    f32 h     = 20 + noise * (u32)((CHUNK_Y / 2) - 50);
+    assert(h >= 0 && h < CHUNK_Y);
+    return h;
+}
+
 static void generate_chunk_voxels(Chunk *chunk) {
     unused(random);
 
@@ -159,12 +168,7 @@ static void generate_chunk_voxels(Chunk *chunk) {
     for(s32 x = 0; x < CHUNK_X; ++x) {
         for(s32 z = 0; z < CHUNK_Z; ++z) {
 
-            f32 abs_x = (chunk->x * CHUNK_X + x) / ((f32)CHUNK_X * 2.0f);
-            f32 abs_z = (chunk->z * CHUNK_Z + z) / ((f32)CHUNK_Z * 2.0f);
-            f32 noise = (stb_perlin_noise3(abs_x, 0, abs_z, 0, 0, 0) + 1) / 2.0f;
-            f32 h     = 20 + noise * (u32)((CHUNK_Y / 2) - 50);
-
-            assert(h >= 0 && h < CHUNK_Y);
+            f32 h = calculate_xz_height(chunk->x, chunk->z, x, z);
 
             for(s32 y = 0; y < CHUNK_Y; ++y) {
 
@@ -172,6 +176,7 @@ static void generate_chunk_voxels(Chunk *chunk) {
                 voxel->x     = x;
                 voxel->y     = y;
                 voxel->z     = z;
+                // srand(x * 7 + y * 69);
 
                 if(y <= h && y < 50) {
                     voxel->type = VOXEL_STONE;
@@ -235,7 +240,12 @@ static Chunk *hash_chunk_get(s32 x, s32 z) {
 static inline bool back_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
     if(voxel->z == 0) {
-        return true;
+        // if(chunk_is_loaded(chunk->x, chunk->z - 1)) {
+        f32 h = calculate_xz_height(chunk->x, chunk->z - 1, voxel->x, (CHUNK_Z - 1));
+        if(voxel->y < h) {
+            return true;
+        }
+        //}
     }
 
     Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z - 1);
@@ -249,7 +259,12 @@ static inline bool back_voxels_solid(Chunk *chunk, Voxel *voxel) {
 static inline bool front_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
     if(voxel->z == (CHUNK_Z - 1)) {
-        return true;
+        // if(chunk_is_loaded(chunk->x, chunk->z + 1)) {
+        f32 h = calculate_xz_height(chunk->x, chunk->z + 1, voxel->x, 0);
+        if(voxel->y < h) {
+            return true;
+        }
+        //}
     }
 
     Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z + 1);
@@ -264,7 +279,13 @@ static inline bool front_voxels_solid(Chunk *chunk, Voxel *voxel) {
 static inline bool left_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
     if(voxel->x == 0) {
-        return true;
+
+        // if(chunk_is_loaded(chunk->x - 1, chunk->z)) {
+        f32 h = calculate_xz_height(chunk->x - 1, chunk->z, (CHUNK_X - 1), voxel->z);
+        if(voxel->y < h) {
+            return true;
+        }
+        //}
     }
 
     Voxel *other = get_chunk_voxel(chunk, voxel->x - 1, voxel->y, voxel->z);
@@ -278,7 +299,12 @@ static inline bool left_voxels_solid(Chunk *chunk, Voxel *voxel) {
 static inline bool right_voxels_solid(Chunk *chunk, Voxel *voxel) {
 
     if(voxel->x == CHUNK_X - 1) {
-        return true;
+        // if(chunk_is_loaded(chunk->x + 1, chunk->z)) {
+        f32 h = calculate_xz_height(chunk->x + 1, chunk->z, 0, voxel->z);
+        if(voxel->y < h) {
+            return true;
+        }
+        //}
     }
 
     Voxel *other = get_chunk_voxel(chunk, voxel->x + 1, voxel->y, voxel->z);
@@ -446,6 +472,8 @@ int generate_chunk_voxels_and_geometry_job(void *data) {
     generate_chunk_geometry(chunk);
 
     chunk->just_loaded = true;
+
+    // update_adjecent_chunks(chunk);
 
     return 0;
 }
