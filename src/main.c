@@ -2,8 +2,9 @@
 
 #include "common.h"
 #include "os.h"
+#include "job.h"
 #include "gpu.h"
-#include "voxel.h"
+#include "chunk.h"
 
 typedef struct Camera {
     V3 pos;
@@ -138,7 +139,7 @@ int main(void) {
                 ++z) {
                 if(!chunk_is_loaded(x, z)) {
                     // NOTE: load chunk into linklist
-                    load_chunk(x, z);
+                    chunk_load(x, z);
                 }
             }
         }
