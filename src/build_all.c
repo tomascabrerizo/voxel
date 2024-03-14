@@ -7,4 +7,6 @@
 #include "job.c"
 #include "voxel.c"
 #include "chunk.c"
+#include "camera.c"
+#include "game.c"
 #include "main.c"

@@ -4,12 +4,6 @@
 #define STB_PERLIN_IMPLEMENTATION
 #include <stb_perlin.h>
 
-static Chunk free_chunks;
-static Chunk loaded_chunks;
-
-static Chunk *hash_chunks;
-static Chunk *chunk_buffer;
-
 extern VoxelBlock voxel_block_map[VOXEL_TYPE_COUNT];
 
 static s32 random(s32 min, s32 max) {
@@ -44,31 +38,7 @@ static f32 calculate_xz_height(s32 chunk_x, s32 chunk_z, s32 x, s32 z) {
     return h;
 }
 
-static u32 chunk_get_hash(s32 x, s32 z) {
-    // TODO: Write an actual hash funciton
-    return ((u32)x * 7 + (u32)z * 73) % HASH_CHUNKS_SIZE;
-}
-
-static Chunk *hash_chunk_get(s32 x, s32 z) {
-    u32 hash      = chunk_get_hash(x, z);
-    Chunk *bucket = hash_chunks + hash;
-
-    if(list_is_empty_named(bucket, hash)) {
-        return NULL;
-    }
-
-    Chunk *chunk = list_get_top_named(bucket, hash);
-    while(!list_is_end_named(bucket, chunk, hash)) {
-        if(chunk->x == x && chunk->z == z) {
-            return chunk;
-        }
-        chunk = chunk->next_hash;
-    }
-
-    return NULL;
-}
-
-static void chunk_generate_voxels(Chunk *chunk) {
+void chunk_generate_voxels(Chunk *chunk) {
     unused(random);
 
     if(!chunk) {
@@ -86,9 +56,12 @@ static void chunk_generate_voxels(Chunk *chunk) {
                 voxel->x     = x;
                 voxel->y     = y;
                 voxel->z     = z;
-                // srand(x * 7 + y * 69);
 
                 if(y <= h && y < 50) {
+
+                    // NOTE: srand is not thread save
+                    // srand(x * 7 + y * 69 + z * 83);
+
                     voxel->type = VOXEL_STONE;
                     s32 num     = random(0, 100);
                     if(num < 6) {
@@ -217,7 +190,7 @@ static inline bool bottom_voxels_solid(Chunk *chunk, Voxel *voxel) {
     return other->type != VOXEL_AIR;
 }
 
-static void chunk_generate_geometry(Chunk *chunk) {
+void chunk_generate_geometry(Chunk *chunk) {
 
     if(!chunk) {
         return;
@@ -338,138 +311,4 @@ static void chunk_generate_geometry(Chunk *chunk) {
             }
         }
     }
-}
-
-static Chunk *get_farthest_chunk(s32 x, s32 z) {
-
-    f32 distance  = 0;
-    Chunk *result = NULL;
-
-    Chunk *chunk = list_get_top(&loaded_chunks);
-    while(!list_is_end(&loaded_chunks, chunk)) {
-
-        V3 chunk_pos  = v3((f32)chunk->x, 0, (f32)chunk->z);
-        V3 cam_to_pos = v3_sub(chunk_pos, v3((f32)x, 0, (f32)z));
-        f32 temp      = v3_length(cam_to_pos);
-
-        if(distance < temp) {
-            distance = temp;
-            result   = chunk;
-        }
-
-        chunk = chunk->next;
-    }
-
-    assert(result);
-    return result;
-}
-
-void chunks_initialize(void) {
-
-    list_init(&loaded_chunks);
-    list_init(&free_chunks);
-
-    // NOTE: Initialize hash table for chunks
-    hash_chunks = (Chunk *)malloc(HASH_CHUNKS_SIZE * sizeof(Chunk));
-    for(u32 i = 0; i < HASH_CHUNKS_SIZE; ++i) {
-        list_init_named(&hash_chunks[i], hash);
-    }
-
-    u32 total_chunk_count = (u32)((MAX_CHUNKS_X * MAX_CHUNKS_Y) * 2);
-    chunk_buffer          = (Chunk *)malloc(sizeof(Chunk) * total_chunk_count);
-    for(u32 chunk_id = 0; chunk_id < total_chunk_count; ++chunk_id) {
-        Chunk *chunk = &chunk_buffer[chunk_id];
-        // NOTE: Insert chunk in the free list
-        list_insert_back(&free_chunks, chunk);
-        // NOTE: Allocate geometry memory on CPU
-        chunk->geometry = (Vertex *)malloc(MAX_CHUNK_GEOMETRY_SIZE);
-        // NOTE: Allocate geometry memory on GPU
-        chunk->vao            = gpu_load_buffer(NULL, 0);
-        chunk->geometry_count = 0;
-    }
-
-    printf("Total chunk memory:%.3lf MB\n",
-           (f64)(sizeof(Chunk) * total_chunk_count / (1024.0 * 1024.0)));
-    printf("Total chunk geometry memory:%.3lf MB\n",
-           (f64)(MAX_CHUNK_GEOMETRY_SIZE * total_chunk_count / (1024.0 * 1024.0)));
-    printf("Total hash chunk memory:%.3lf MB\n",
-           (f64)(sizeof(Chunk) * HASH_CHUNKS_SIZE / (1024.0 * 1024.0)));
-}
-
-void chunk_terminate(void) {
-
-    u32 total_chunk_count = (u32)((MAX_CHUNKS_X * MAX_CHUNKS_Y) * 2);
-    for(u32 chunk_id = 0; chunk_id < total_chunk_count; ++chunk_id) {
-        Chunk *chunk = &chunk_buffer[chunk_id];
-        free(chunk->geometry);
-    }
-
-    free(chunk_buffer);
-    free(hash_chunks);
-}
-
-int chunk_generate_voxels_and_geometry_job(void *data) {
-
-    Chunk *chunk = (Chunk *)data;
-    chunk_generate_voxels(chunk);
-    chunk_generate_geometry(chunk);
-
-    chunk->just_loaded = true;
-    chunk->is_loaded   = true;
-
-    return 0;
-}
-
-void chunk_load(s32 x, s32 z) {
-
-    if(list_is_empty(&free_chunks)) {
-        Chunk *chunk_to_unload = get_farthest_chunk(x, z);
-        chunk_unload(chunk_to_unload);
-    }
-
-    Chunk *chunk = list_get_top(&free_chunks);
-    list_remove(chunk);
-    chunk->x              = x;
-    chunk->z              = z;
-    chunk->geometry_count = 0;
-
-    // NOTE: Insert chunk into loaded chunk list
-    list_insert_back(&loaded_chunks, chunk)
-
-        // NOTE: Insert chunk into loaded chunk hash
-        u32 hash  = chunk_get_hash(chunk->x, chunk->z);
-    Chunk *bucket = hash_chunks + hash;
-    list_insert_back_named(bucket, chunk, hash);
-
-    ThreadJob job;
-    job.run  = chunk_generate_voxels_and_geometry_job;
-    job.args = (void *)chunk;
-    push_job(job);
-}
-
-void chunk_unload(Chunk *chunk) {
-    chunk->is_loaded = false;
-    // NOTE: Remove chunk from loaded chunk hash
-    list_remove_named(chunk, hash);
-    // NOTE: Remove chunk from loaded chunks
-    list_remove(chunk);
-    // NOTE: Insert chunk in free list
-    list_insert_front(&free_chunks, chunk);
-}
-
-b32 chunk_is_loaded(s32 x, s32 z) {
-    Chunk *chunk = hash_chunk_get(x, z);
-    if(chunk && chunk->is_loaded) {
-        return true;
-    } else {
-        return false;
-    }
-}
-
-Chunk *loaded_chunk_list_get_first(void) {
-    return list_get_top(&loaded_chunks);
-}
-
-b32 loaded_chunk_list_is_end(Chunk *chunk) {
-    return list_is_end(&loaded_chunks, chunk);
 }
