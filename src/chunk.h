@@ -11,7 +11,7 @@
 
 #define MAX_CHUNKS_X (32 * 1)
 #define MAX_CHUNKS_Y (32 * 1)
-#define MAX_CHUNK_GEOMETRY_SIZE (5 * 1024 * 1024)
+#define MAX_CHUNK_GEOMETRY_SIZE (1 * 1024 * 1024)
 
 typedef struct ChunkNode {
     struct ChunkNode *prev;
@@ -26,7 +26,7 @@ typedef struct Chunk {
 
     s32 x, z;
     Voxel voxels[CHUNK_TOTAL_SIZE];
-    Vertex geometry[MAX_CHUNK_GEOMETRY_SIZE / sizeof(Vertex)];
+    Vertex geometry[(MAX_CHUNK_GEOMETRY_SIZE / sizeof(Vertex))];
     u32 geometry_count;
 
     u32 vao;

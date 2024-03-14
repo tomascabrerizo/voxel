@@ -43,7 +43,7 @@ typedef struct VoxelBlock {
 } VoxelBlock;
 
 typedef struct Voxel {
-    u8 type;
+    u32 type;
     u32 x, y, z;
 } Voxel;
 

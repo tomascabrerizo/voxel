@@ -9,6 +9,11 @@ static void game_allocate_chunk_buffer(Game *game) {
     game->chunk_buffer_count = (u32)((MAX_CHUNKS_X * MAX_CHUNKS_Y) * 2);
     game->chunk_buffer       = (Chunk *)malloc(sizeof(Chunk) * game->chunk_buffer_count);
 
+    printf("chunk: %lld\n", sizeof(game->chunk_buffer[0]));
+    printf("chunk voxels size: %lld\n", sizeof(game->chunk_buffer[0].voxels));
+    printf("chunk vertex size: %lld\n", sizeof(game->chunk_buffer[0].geometry));
+    printf("total chunk buffer size: %lld\n", (u64)(sizeof(Chunk) * game->chunk_buffer_count));
+
     for(u32 chunk_id = 0; chunk_id < game->chunk_buffer_count; ++chunk_id) {
         Chunk *chunk          = &game->chunk_buffer[chunk_id];
         chunk->vao            = gpu_load_buffer(NULL, 0);
@@ -213,14 +218,15 @@ void game_render(void) {
     M4 view = m4_lookat2(g.camera.pos, v3_add(g.camera.pos, g.camera.target), g.camera.up);
     gpu_load_m4_uniform(g.program, "view", view);
 
+    u32 chunk_count             = 0;
+    u32 chunk_total_vertex_size = 0;
+
     ChunkNode *chunk_node = list_get_top(&g.loaded_chunks_list);
     while(!list_is_end(&g.loaded_chunks_list, chunk_node)) {
         Chunk *chunk = (Chunk *)chunk_node;
 
         if(chunk->just_loaded) {
             glBindBuffer(GL_ARRAY_BUFFER, chunk->vao);
-            // glBufferSubData(GL_ARRAY_BUFFER, 0, chunk->geometry_count * sizeof(Vertex),
-            // chunk->geometry);
             glBufferData(GL_ARRAY_BUFFER, chunk->geometry_count * sizeof(Vertex), chunk->geometry,
                          GL_DYNAMIC_DRAW);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -237,8 +243,18 @@ void game_render(void) {
 
             glBindVertexArray(chunk->vao);
             glDrawArrays(GL_TRIANGLES, 0, chunk->geometry_count);
+
+            chunk_count += 1;
+            chunk_total_vertex_size += chunk->geometry_count * sizeof(Vertex);
         }
 
         chunk_node = chunk_node->next;
     }
+
+    unused(chunk_count);
+    unused(chunk_total_vertex_size);
+#if 0
+    f64 avrg_chunk_vertex_size = (f64)chunk_total_vertex_size / (f64)chunk_count;
+    printf("avrg chunk vertex size: %lfMB\n", avrg_chunk_vertex_size / (1024.0 * 1014.0));
+#endif
 }
