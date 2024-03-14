@@ -53,9 +53,6 @@ void chunk_generate_voxels(Chunk *chunk) {
             for(s32 y = 0; y < CHUNK_Y; ++y) {
 
                 Voxel *voxel = get_chunk_voxel(chunk, x, y, z);
-                voxel->x     = x;
-                voxel->y     = y;
-                voxel->z     = z;
 
                 if(y <= h && y < 50) {
 
@@ -87,7 +84,7 @@ void chunk_generate_voxels(Chunk *chunk) {
 
                 if(voxel->type != VOXEL_DIRT)
                     continue;
-                Voxel *up = get_chunk_voxel(chunk, voxel->x, voxel->y + 1, voxel->z);
+                Voxel *up = get_chunk_voxel(chunk, x, y + 1, z);
                 if(up && up->type == VOXEL_AIR) {
                     voxel->type = VOXEL_GRASS;
                 }
@@ -96,18 +93,18 @@ void chunk_generate_voxels(Chunk *chunk) {
     }
 }
 
-static inline bool back_voxels_solid(Chunk *chunk, Voxel *voxel) {
+static inline bool back_voxels_solid(Chunk *chunk, s32 x, s32 y, s32 z) {
 
-    if(voxel->z == 0) {
+    if(z == 0) {
         // if(chunk_is_loaded(chunk->x, chunk->z - 1)) {
-        f32 h = calculate_xz_height(chunk->x, chunk->z - 1, voxel->x, (CHUNK_Z - 1));
-        if(voxel->y < h) {
+        f32 h = calculate_xz_height(chunk->x, chunk->z - 1, x, (CHUNK_Z - 1));
+        if(y < h) {
             return true;
         }
         //}
     }
 
-    Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z - 1);
+    Voxel *other = get_chunk_voxel(chunk, x, y, z - 1);
 
     if(!other) {
         return false;
@@ -115,18 +112,18 @@ static inline bool back_voxels_solid(Chunk *chunk, Voxel *voxel) {
     return other->type != VOXEL_AIR;
 }
 
-static inline bool front_voxels_solid(Chunk *chunk, Voxel *voxel) {
+static inline bool front_voxels_solid(Chunk *chunk, s32 x, s32 y, s32 z) {
 
-    if(voxel->z == (CHUNK_Z - 1)) {
+    if(z == (CHUNK_Z - 1)) {
         // if(chunk_is_loaded(chunk->x, chunk->z + 1)) {
-        f32 h = calculate_xz_height(chunk->x, chunk->z + 1, voxel->x, 0);
-        if(voxel->y < h) {
+        f32 h = calculate_xz_height(chunk->x, chunk->z + 1, x, 0);
+        if(y < h) {
             return true;
         }
         //}
     }
 
-    Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y, voxel->z + 1);
+    Voxel *other = get_chunk_voxel(chunk, x, y, z + 1);
 
     if(!other) {
         return false;
@@ -135,19 +132,19 @@ static inline bool front_voxels_solid(Chunk *chunk, Voxel *voxel) {
     return other->type != VOXEL_AIR;
 }
 
-static inline bool left_voxels_solid(Chunk *chunk, Voxel *voxel) {
+static inline bool left_voxels_solid(Chunk *chunk, s32 x, s32 y, s32 z) {
 
-    if(voxel->x == 0) {
+    if(x == 0) {
 
         // if(chunk_is_loaded(chunk->x - 1, chunk->z)) {
-        f32 h = calculate_xz_height(chunk->x - 1, chunk->z, (CHUNK_X - 1), voxel->z);
-        if(voxel->y < h) {
+        f32 h = calculate_xz_height(chunk->x - 1, chunk->z, (CHUNK_X - 1), z);
+        if(y < h) {
             return true;
         }
         //}
     }
 
-    Voxel *other = get_chunk_voxel(chunk, voxel->x - 1, voxel->y, voxel->z);
+    Voxel *other = get_chunk_voxel(chunk, x - 1, y, z);
 
     if(!other) {
         return false;
@@ -155,18 +152,18 @@ static inline bool left_voxels_solid(Chunk *chunk, Voxel *voxel) {
     return other->type != VOXEL_AIR;
 }
 
-static inline bool right_voxels_solid(Chunk *chunk, Voxel *voxel) {
+static inline bool right_voxels_solid(Chunk *chunk, s32 x, s32 y, s32 z) {
 
-    if(voxel->x == CHUNK_X - 1) {
+    if(x == CHUNK_X - 1) {
         // if(chunk_is_loaded(chunk->x + 1, chunk->z)) {
-        f32 h = calculate_xz_height(chunk->x + 1, chunk->z, 0, voxel->z);
-        if(voxel->y < h) {
+        f32 h = calculate_xz_height(chunk->x + 1, chunk->z, 0, z);
+        if(y < h) {
             return true;
         }
         //}
     }
 
-    Voxel *other = get_chunk_voxel(chunk, voxel->x + 1, voxel->y, voxel->z);
+    Voxel *other = get_chunk_voxel(chunk, x + 1, y, z);
 
     if(!other) {
         return false;
@@ -174,16 +171,16 @@ static inline bool right_voxels_solid(Chunk *chunk, Voxel *voxel) {
     return other->type != VOXEL_AIR;
 }
 
-static inline bool top_voxels_solid(Chunk *chunk, Voxel *voxel) {
-    Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y + 1, voxel->z);
+static inline bool top_voxels_solid(Chunk *chunk, s32 x, s32 y, s32 z) {
+    Voxel *other = get_chunk_voxel(chunk, x, y + 1, z);
     if(!other) {
         return false;
     }
     return other->type != VOXEL_AIR;
 }
 
-static inline bool bottom_voxels_solid(Chunk *chunk, Voxel *voxel) {
-    Voxel *other = get_chunk_voxel(chunk, voxel->x, voxel->y - 1, voxel->z);
+static inline bool bottom_voxels_solid(Chunk *chunk, s32 x, s32 y, s32 z) {
+    Voxel *other = get_chunk_voxel(chunk, x, y - 1, z);
     if(!other) {
         return false;
     }
@@ -191,7 +188,6 @@ static inline bool bottom_voxels_solid(Chunk *chunk, Voxel *voxel) {
 }
 
 void chunk_generate_geometry(Chunk *chunk) {
-
     if(!chunk) {
         return;
     }
@@ -215,7 +211,7 @@ void chunk_generate_geometry(Chunk *chunk) {
 
                 VoxelBlock block_coords = voxel_block_map[voxel->type];
 
-                if(!back_voxels_solid(chunk, voxel)) {
+                if(!back_voxels_solid(chunk, x, y, z)) {
                     R2 coords = block_coords.coords[VOXEL_BLOCK_BACK];
                     // NOTE: Back face
                     add_vertex(chunk, v3(min_x, min_y, min_z), v3(0, 0, -1), coords.min);
@@ -228,7 +224,7 @@ void chunk_generate_geometry(Chunk *chunk) {
                     add_vertex(chunk, v3(min_x, min_y, min_z), v3(0, 0, -1), coords.min);
                 }
 
-                if(!front_voxels_solid(chunk, voxel)) {
+                if(!front_voxels_solid(chunk, x, y, z)) {
                     R2 coords = block_coords.coords[VOXEL_BLOCK_FRONT];
                     // NOTE: Front face
                     add_vertex(chunk, v3(min_x, min_y, max_z), v3(0, 0, 1), coords.min);
@@ -241,7 +237,7 @@ void chunk_generate_geometry(Chunk *chunk) {
                                v2(coords.max.x, coords.min.y));
                 }
 
-                if(!right_voxels_solid(chunk, voxel)) {
+                if(!right_voxels_solid(chunk, x, y, z)) {
                     R2 coords = block_coords.coords[VOXEL_BLOCK_RIGHT];
                     // NOTE: Right face
                     add_vertex(chunk, v3(max_x, min_y, min_z), v3(1, 0, 0),
@@ -258,7 +254,7 @@ void chunk_generate_geometry(Chunk *chunk) {
                                v2(coords.min.x, coords.max.y));
                 }
 
-                if(!left_voxels_solid(chunk, voxel)) {
+                if(!left_voxels_solid(chunk, x, y, z)) {
                     R2 coords = block_coords.coords[VOXEL_BLOCK_LEFT];
                     // NOTE: Left face
                     add_vertex(chunk, v3(min_x, min_y, min_z), v3(-1, 0, 0),
@@ -275,7 +271,7 @@ void chunk_generate_geometry(Chunk *chunk) {
                                v2(coords.min.x, coords.max.y));
                 }
 
-                if(!top_voxels_solid(chunk, voxel)) {
+                if(!top_voxels_solid(chunk, x, y, z)) {
                     R2 coords = block_coords.coords[VOXEL_BLOCK_TOP];
                     // NOTE: Top face
                     add_vertex(chunk, v3(min_x, max_y, min_z), v3(0, 1, 0),
@@ -292,7 +288,7 @@ void chunk_generate_geometry(Chunk *chunk) {
                                v2(coords.min.x, coords.max.y));
                 }
 
-                if(!bottom_voxels_solid(chunk, voxel)) {
+                if(!bottom_voxels_solid(chunk, x, y, z)) {
                     R2 coords = block_coords.coords[VOXEL_BLOCK_BOTTOM];
                     // NOTE: Bottom face
                     add_vertex(chunk, v3(min_x, min_y, min_z), v3(0, -1, 0),

@@ -43,8 +43,7 @@ typedef struct VoxelBlock {
 } VoxelBlock;
 
 typedef struct Voxel {
-    u32 type;
-    u32 x, y, z;
+    u8 type;
 } Voxel;
 
 #define VOXEL_DIM 1.0f

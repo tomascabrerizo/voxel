@@ -5,7 +5,7 @@
 #include "chunk.h"
 #include "camera.h"
 
-#define GAME_CHUNK_HASH_SIZE (MAX_CHUNKS_X * MAX_CHUNKS_Y * 2)
+#define GAME_CHUNK_HASH_SIZE (MAX_CHUNKS_X * MAX_CHUNKS_Y * 2) 
 
 typedef struct Game {
 
